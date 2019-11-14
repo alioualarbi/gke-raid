@@ -1,0 +1,40 @@
+kind: DaemonSet
+apiVersion: extensions/v1beta1
+metadata:
+  name: ssd-startup-script
+  labels:
+    app: ssd-startup-script
+spec:
+  template:
+    metadata:
+      labels:
+        app: ssd-startup-script
+    spec:
+      hostPID: true
+      containers:
+      - name: ssd-startup-script
+        image: gcr.io/google-containers/startup-script:v1
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+        env:
+        - name: STARTUP_SCRIPT
+          value: |
+            #!/bin/bash
+            sudo umount /mnt/disks/ssd0
+            sudo umount /mnt/disks/ssd1	##repeat this line and increase the ssd# by an increment of 1 for every local SSD you want as part of the raid array
+            sudo mdadm --create /dev/md0 --level=0 --raid-devices=2 /dev/sdb /dev/sdc --run
+            sudo mkdir –p /mnt/disks/ssd-array
+            sudo mkfs.ext4 /dev/md0	
+            sudo mount /dev/md0 /mnt/disks/ssd-array
+            sudo chmod a+w /mnt/disks/ssd-array
+            sudo chmod a+w /dev/md0
+            sudo chmod -R 0777 /mnt/disks/ssd-array
+            sudo chmod -R 0777 /dev/md0
+            echo done
+      nodeSelector:
+        cloud.google.com/gke-local-ssd: "true"
+      tolerations:
+      - key: "local-ssd"
+        operator: "Exists"
+        effect: "NoSchedule"
